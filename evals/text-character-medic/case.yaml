@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: text-character-medic
+expected_outcome: |
+  A humanoid character asset brief with Unity Humanoid-compatible skeleton, deformation-aware topology plan, LOD chain and texture plan, plus Blender Python stage scripts through FBX export.

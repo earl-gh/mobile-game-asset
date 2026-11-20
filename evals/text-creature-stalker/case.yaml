@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: text-creature-stalker
+expected_outcome: |
+  A creature asset built and rendered in Blender with a part inventory, LOD chain, Low/Medium/High behaviour and a Unity-ready export, whose silhouette reads as the described stalker.

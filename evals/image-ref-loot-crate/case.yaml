@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: image-ref-loot-crate
+expected_outcome: |
+  A prop asset brief derived from the reference image's proportions (1.2 x 0.8 x 0.9 m), hinged lid pivot, interactable latch, emissive light, and Blender Python stage scripts through Unity FBX export with LODs for low/medium/high.
+context:
+  scaffold_script: place-files.sh
