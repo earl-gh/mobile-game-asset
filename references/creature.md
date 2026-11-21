@@ -1,41 +1,51 @@
 # Creature (non-humanoid)
 
-Anatomy drives everything. The model reads as alive when its forms follow the skeleton and its silhouette exaggerates the species' defining trait (a bull's neck, a raptor's claw, a spider's leg span).
+Anatomy drives everything. A creature reads as alive when its forms follow the skeleton, and as Valorant-like when its masses are planar and its defining trait is exaggerated: a bull's neck, a raptor's claw, a stalker's crest. Enemies get the same team-fresnel treatment as characters, so read `character.md` for the shader setup.
 
 ## Budget
 
-| Size class | LOD0 | LOD1 (Low hero) | LOD2 | Bones |
+| Size class | LOD0 | LOD1 | LOD2 | Bones |
 |---|---|---|---|---|
 | Small (critter, pet) | 2–4k | 1–2k | 500 | 15–30 |
 | Medium (enemy, mount) | 7–11k | 3.5–5k | 1.5k | 35–60 |
 | Boss | 16–24k | 8–12k | 4k | 60–90 |
 
-- **Texture:** 1024 for small, 2048 for medium and boss creatures (texel density 400–700 px/m).
-- **Materials:** 1 opaque material, plus 1 alpha-clip material if needed for fur or membrane cards. Use emissive eyes or weak points through the mask's emission. Put emission in the albedo alpha only if the project shader supports it; otherwise add a small 4th mask channel in a custom Shader Graph.
+- **Texture:** 1024 for small, 2048 for medium and boss (400–700 px/m).
+- **Material:** 1, VStyle/Lit Character. Emissive eyes and weak points use MAER G.
+
+## Blockout (most of the work)
+
+1. **Stick skeleton first.** Measured from the reference or the brief:
+   - the spine curve as 5–8 points: neck arch, back line, pelvis tilt
+   - the shoulder and hip girdles
+   - limb segment lengths
+   - the stance: digitigrade, plantigrade or unguligrade, which decides where the visible "knee" bends
+2. **Gesture.** The spine curve and head carriage *are* the creature's character: a stalker's low head and arched back, a brute's forward-thrust shoulders. Block the gesture before any volume, and check it in the side silhouette.
+3. **Graded volumes:**
+   - Skin-modifier radii heavy at the shoulder and hip masses, tapering hard to the wrists, ankles and tail tip.
+   - The rib cage is a big wedge, the waist a pinch: the negative space under the belly sells the build.
+   - Head as a separate volume with planes for cranium, brow, muzzle, jaw and cheek. Never a tapered tube.
+4. **Exaggerate the defining trait** 20–30%: crest, horns, claws, club tail. It's a primary mass in the 30 m silhouette from the side, the creature's main readable view.
+5. **Armour and plates** as separate faceted shells stepping over the body (2–5 cm), with overlap direction head→tail. Spikes and horns are tapered, faceted 5–6-sided cones with a sweep, not straight cones.
+6. **Negative space:** between the legs, under the belly, between the crest plates, between the horns and the skull.
+7. **Value plan:** body / armour / glow as separated greys. Glow zones sit where the eye goes (eyes, chest, weak points).
 
 ## Pipeline additions
 
-1. **Skeleton first.** Build a stick skeleton from the reference: spine curve, limb lengths and joint angles. Measure leg segments from the image and confirm the digitigrade, plantigrade or unguligrade stance. Then block out volumes around the bones, because that keeps joints where the topology needs them.
-2. **Bake source.**
-   - Follow "Organic assets: build high, then retopo" in `SKILL.md`: Skin-modifier body with graded radii, a separate head volume, big anatomy (muscle masses, plates, protrusions from the brief) added as merged volumes rather than hand-sculpted strokes, then Remesh-merge.
-   - Carry detail at three scales (`references/surface.md`): primary in the silhouette, secondary in the bevels and normal map, and fine surface pattern (scales, pores, wrinkles) built on the bake source and baked into the normal map, then echoed in the albedo masks. Hand-painting patterns into the albedo alone is what reads as childish.
-   - Spend where the eye goes: about a third of the triangle budget on the head and extremities, since that's where a toy look shows first. Give the head a real jaw, brow and muzzle volume rather than a blobby tube.
-3. **Topology.**
-   - Use radial loops at every ball joint and 3 loops at each hinge, found from the skeleton you built.
-   - Long tapering appendages need an even ring count of 6–10 sides, scaled down toward the tip.
-   - Articulated openings (anything that opens and shows an interior): a separate loop set around the opening, and an interior cavity of about 200 tris, visible only when it opens.
-4. **Secondary motion chains.** Every appendage the inventory marks as swaying or lagging gets a bone chain (3–8 bones) set up for Unity's `Animation Rigging` or a jiggle solver. Name the chains `<part>_01..`.
-5. **Rig.**
-   - Generic rig with the root at the ground under the center of mass, named `root`. Then `pelvis`, then the spine.
-   - Add an IK target empty at each ground contact so Unity's Animation Rigging can plant the feet, named from the inventory.
-   - Use ≤ 4 influences. Rigid parts (hard plates and protrusions) are 100% bound to one bone.
-6. **Fur, feathers or similar (if the brief has them).** Use 1–3 shell layers of alpha-clip cards only along the silhouette, at most 150 cards. Elsewhere, paint the clumps into the albedo with an edge-highlight pass.
-7. **LODs.**
-   - LOD1: halve the ring counts on limbs and appendages, and close any articulated opening (drop its cavity).
-   - LOD2: no alpha cards, and merge small digits or fine parts into their parent.
-   - From LOD1 on, collapse the secondary chain weights to the parent bone, so fewer bones are evaluated.
+1. **Bake source:** remesh-merge the volumes, push planes and creases (no smooth blob), then add big anatomy as merged volumes. The normal map carries plate edges and big muscle forms. Fine scales or pores only if the creature is seen close up, and never on a 3P enemy at mobile scale.
+2. **Topology:**
+   - radial loops at ball joints, 3 loops at hinges
+   - 6–10-sided rings on tapering appendages
+   - articulated openings get their own loop set plus a ~200-tri interior seen only when open
+3. **Secondary chains:** swaying parts from the inventory get 3–8 bones (`<part>_01..`).
+4. **Rig:** `root` at the ground under the center of mass → `pelvis` → spine. IK target empties at the ground contacts. ≤ 4 influences, plates 100% to one bone.
+5. **LODs:**
+   - LOD1: halve the appendage rings, close openings.
+   - LOD2: merge digits and small spikes.
+
+   The defining trait stays in every LOD.
 
 ## Pitfalls
 
-- Study how each limb attaches to the torso in the reference. If the real anatomy has a floating girdle (like a shoulder blade), give it a sliding bone, or the limb pinches.
-- Thin membranes or sheets: single-sided geometry needs a double-sided material. On mobile, model them as thin closed geometry instead, so you avoid a second shader variant.
+- Floating girdles (shoulder blades) need a sliding bone, or the limb pinches.
+- Thin membranes are thin closed geometry, not single-sided planes.

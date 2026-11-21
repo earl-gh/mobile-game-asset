@@ -1,40 +1,64 @@
 # Weapon & equipment
 
-A held item is on screen constantly in first person and fills a big part of the frame, so it's the highest-fidelity asset per pixel. The same item in the world (carried by others, dropped, deployed) is tiny. So build **two meshes from one source**. Every part, pivot and socket comes from the Part Inventory.
+A held item is on screen constantly in first person and fills much of the frame. It's the highest-fidelity asset per pixel, and the one place close-up detail is allowed. The same item in third person is tiny. So build **two meshes from one source**.
 
 ## Budget
 
 | | LOD0 | LOD1 | LOD2 | Texture |
 |---|---|---|---|---|
-| 1P view | 7–12k tris | none | none | 2048 set |
-| 3P / world | 1.5–3k | 800 | cull | the same set at mip 1–2 (no separate texture) |
-| Small gadget / consumable | 1.5–4k (1P), 600 (3P) | | | 1024 |
+| 1P view | 7–12k | none | none | 2048 set |
+| 3P / world | 1.5–3k | 800 | cull | same set at mip 1–2 |
+| Small gadget | 1.5–4k (1P), 600 (3P) | | | 1024 |
 
-- **Texel density:** highest on the asset, biased toward what the player sees most (the side facing the camera at 1.25×, hidden sides at 0.75×). Aim for at least about 2000 px/m. A small item on one 2048 set will land well above that, which is fine.
-- **Materials:** 1. **Bones (1P):** one per independently animated part from the inventory, plus a root.
+- **Texel density:** at least about 2000 px/m on 1P, with the camera-facing side 1.25× and the hidden side 0.75×.
+- **Material:** 1, VStyle/Lit Weapon (smoothstep diffuse plus cubemap specular; the Low tier keeps specular).
+- **Bones (1P):** one per moving part, plus a root.
+
+## Blockout (most of the work)
+
+1. **Landmarks first:**
+   - muzzle, sight line (top of the optic or iron sights), grip, trigger, mag well, stock butt
+   - real dimensions from the brief
+   - grip angle 15–20° back from vertical
+   - the use direction along −Y (it becomes Unity +Z)
+2. **The side profile is the design.**
+   - Draw the weapon's full side outline as one polygon from the landmarks, then extrude it to the receiver width.
+   - Inset and extrude the profile for width changes (handguard narrower than the receiver, mag slimmer than the well).
+   - This gives the deliberate, designed outline Valorant weapons have. Never stack cubes.
+3. **Shape language:**
+   - A boxy receiver with big 45° chamfers on the top edges.
+   - A forward sweep: angled front faces, raked mags and handguards.
+   - One dominant mass (the receiver) with the barrel, mag and stock as medium forms.
+   - Exaggerate the mag, muzzle device and optic by 10–20%.
+4. **Negative space:** the trigger guard, the gap between the grip and the mag, the stock's skeleton cutouts, the vent openings in a shroud. These carry the weapon's identity at 3P scale.
+5. **1P camera check in clay**, early: a camera at the eye socket, 60–70° FOV, weapon at the view-model position.
+   - Lower-right silhouette readable.
+   - Top line clean.
+   - Sight centered.
+   - Nothing intersects the near clip plane.
+6. **Moving parts** (bolt, charging handle, folding stock, mag) split and range-tested in clay.
+7. **Value plan:**
+   - dominant body color 60%
+   - secondary (grip, mag, rail) 30%
+   - accent 10% on the top or side the player sees in 1P
 
 ## Pipeline additions
 
-1. **Scale and orientation.** Use real dimensions from the brief. Define the object's *use direction* (where it points, strikes or projects) and keep it consistent: −Y in Blender becomes +Z forward in Unity. Place the pivot at the hand contact point.
-2. **Sockets from the inventory.** One empty per attach point: where the hand or off-hand grips (for IK), where the player's eye aligns (if the item is aimed), and where effects or projectiles originate. Misaligned eye or grip sockets force animation fixes later, so check them in an ortho screenshot.
-3. **Hard-surface bake source (mid-poly workflow).**
-   - Build the game mesh first, then duplicate it.
-   - Add a weighted Bevel (2–3 segments, `profile=0.7`) to make the bake source. Skip Subdivision here: it rounds flat panels.
-   - Boolean cuts (vents, grip texture, engravings) are applied **on the bake source only**. The game mesh carries them as normal-map detail.
-   - This gives AAA-crisp edges at mobile tri counts.
-4. **Game mesh priorities.**
-   - Spend segments on the silhouette: round parts on the top and sides facing the camera get 8–16 sides, hidden ones get 6.
-   - Small add-on details stay floating, not stitched into the main body. They bake and shade cleaner.
-5. **Moving parts.** Each part marked "moves" in the inventory is a separate object with its pivot at its true hinge or slide axis, skinned 100% to its own bone (no soft weights on hard surfaces).
-6. **Skin-ready UVs.** Give each recolorable zone from the inventory contiguous shells. Paint a zone-ID into the mask's B channel so a Unity skin shader can recolor by zone without new albedos (base albedo plus tint zones).
-7. **Texture emphasis.**
-   - Edge wear only on exposed convex edges, from the curvature mask, kept stylized and clean.
-   - A painted top-to-bottom gradient.
-   - Emissive zones as small as the inventory allows.
-8. **Build the 3P mesh from the 1P one.** Delete interiors and hidden parts, reduce side counts to 6–8, merge floating details, and keep the same UV layout so it reuses the 1P texture at a lower mip. Keep bones only for motion that is visible from outside.
-9. **Worn equipment.** Follow `character.md`: skin it to the body bones and hide the faces it covers. Thrown or deployed items follow `prop.md` rules, with a socket for effects.
+1. **Sockets:** grip, off-hand grip (IK), eye or sight alignment, muzzle and shell-eject points. Verify them in an ortho screenshot.
+2. **Hard-surface mid-poly:**
+   - The game mesh comes first. Duplicate it, add a weighted Bevel (2–3 segments, `profile=0.7`) as the bake source, and apply Boolean cuts (vents, knurling, engravings) on the source only.
+   - Chamfer class 1 cm, so highlights catch the cubemap.
+3. **Game mesh:** round parts facing the camera get 8–16 sides, hidden ones 6. Small add-ons stay floating (not stitched in) for clean shading.
+4. **Texture:**
+   - Edge wear only on convex edges (2–6 px, toward bare metal).
+   - No painted gradient and no AO in the albedo.
+   - Micro detail (knurling, text) in the 1P normal map only.
+   - Skin zones as contiguous shells, tint IDs in MAER A.
+5. **3P mesh from 1P:** delete interiors and hidden faces, 6–8 sides, merge floating details, same UVs. It must pass the silhouette test against 1P at 10 m.
+6. **Worn equipment** follows `character.md`; thrown or deployed items follow `prop.md`.
 
 ## Pitfalls
 
-- Mesh Compression must be Off for 1P meshes, because it wobbles close-up vertices.
-- Transparent or see-through parts in the 1P view: use one opaque material with a painted gradient. A transparent pass in the middle of the screen is expensive.
+- Mesh Compression Off on 1P meshes.
+- No transparency in the 1P view: scope glass is opaque with a painted gradient, or a separate mirror-like material only where Riot also uses rendered reflections (scope glass).
+- First-person weapons are the only things that may cast realtime shadows (onto the hands).

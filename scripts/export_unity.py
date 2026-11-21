@@ -26,6 +26,7 @@ bpy.ops.export_scene.fbx(
     apply_scale_options='FBX_SCALE_ALL', bake_space_transform=not has_armature,
     axis_forward='-Z', axis_up='Y',
     use_mesh_modifiers=True, mesh_smooth_type='FACE', use_tspace=True,
+    colors_type='LINEAR',                 # skin mask in vertex colour R must arrive exactly 0/1
     add_leaf_bones=False, use_armature_deform_only=True, bake_anim=False,
     path_mode='STRIP')    # textures are imported separately in Unity
 print(f"EXPORTED {len(objs)} objects -> {path}")

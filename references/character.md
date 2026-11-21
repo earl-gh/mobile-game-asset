@@ -1,53 +1,65 @@
 # Character (humanoid)
 
-These are the gameplay-readable heroes. In a Valorant-style game, a player is identified from 30 m by silhouette and color blocking, so detail lives in shape and paint, not polygons.
+In a Valorant-like game, a player is identified at 30 m by **silhouette, color blocking and the shader's team fresnel**. Detail lives in shape and flat paint, not polygons or texture noise. Characters are the most saturated, most contrasted things on screen.
 
 ## Budget
 
-| | LOD0 (High/Med) | LOD1 (Low hero) | LOD2 | Cull |
+| | LOD0 | LOD1 | LOD2 | Cull |
 |---|---|---|---|---|
-| Playable hero | 14–18k tris | 7–9k | 3–4k | < 2% screen |
+| Playable agent | 14–18k tris | 7–9k | 3–4k | < 2% screen |
 | NPC / enemy | 8–12k | 4–6k | 1.5–2.5k | < 2% |
-| 1P arms (separate asset) | 6–9k | none (1P never LODs) | | |
+| 1P arms (separate asset) | 6–9k | none | | |
 
-- **Texture:** one 2048 set for body and head (texel density about 700 px/m, with the face shells at 1.5×). Add a separate 512 hair or alpha card set only if cards are needed.
-- **Materials:** at most 2 (opaque, plus alpha-clip hair). **Bones:** 50–65 body, plus at most 12 face bones or 8–15 blendshapes (not both).
-- **LOD transition heights:** 0.45 / 0.2 / 0.02.
+- **Texture:** one 2048 set (about 700 px/m, face shells 1.5×).
+- **Materials:** 1, VStyle/Lit Character. No alpha hair.
+- **Bones:** 50–65 body, plus ≤ 12 face bones or 8–15 blendshapes.
+- **LOD transitions:** 0.45 / 0.2 / 0.02. Every LOD passes the silhouette IoU test.
+
+## Blockout (most of the work, see `blockout.md`)
+
+1. **Proportion sheet:**
+   - 7–7.5 heads tall (realistic is 8)
+   - shoulders 2.2–2.5 heads wide (heroic builds up to 2.7)
+   - hands about 10% oversized, feet planted slightly wide
+   - A-pose with arms at 45°
+
+   Landmark empties for crown, chin, shoulders, elbows, wrists, hips, knees, ankles and balls of the feet, measured against the 1.8 m figure.
+2. **Archetype in the masses.** Decide what the silhouette says before modeling: slim athletic, heavy, tall and lean. Encode it in the torso wedge (shoulder-to-waist ratio 1.4–1.7 for athletic builds), the leg length (legs at least half the height), and the head size.
+3. **Body volumes:** Skin-modifier skeleton with graded radii (`blockout.md` §4), Subdivision 2, and a separate head volume with planes for brow, cheekbone, jaw and chin. Then **flatten the planes:** thigh front, shin, forearm and chest become broad facets with creases. Valorant anatomy is planar stylization, not soft realism.
+4. **Costume over the body, as layered masses.**
+   - Jacket, armour and pouches sit 1–4 cm proud of what's beneath, with a visible step and overlap direction.
+   - Delete any body that's covered.
+   - Each garment gets 3–5 wedge folds from tension points (shoulder, elbow, belt, knee). No small wrinkles.
+5. **Signature silhouette pieces.** Every agent has 1–3 shapes nobody else has: a hood, a cape, a shoulder piece, a hairstyle, a gadget on the back. They're primary or secondary masses, exaggerated 15–25%, and they must show in the 30 m black silhouette **from the front and the side**.
+6. **Hair:** 4–8 big sculpted clumps with one flow direction, as opaque geometry with sharp clump edges. Hair is a silhouette element, so block it in pass 1b, not at the end.
+7. **Hands:** mitten blockout first (palm block plus thumb), then fingers as 4 tapered boxes with knuckle planes. Oversized and readable.
+8. **Value plan:** greyscale `Col` zones following form breaks (jacket, pants, skin, gear). The accent sits on chest, shoulders or head, where the fresnel and the camera land.
 
 ## Pipeline additions
 
-Build the body and head by "Organic assets: build high, then retopo" in `SKILL.md` before the steps below. Rigid worn pieces stay hard-surface.
+1. **Retopo** (Organic assets in `SKILL.md`):
+   - 3 loops at the elbows, knees and knuckles, with the middle loop on the pivot
+   - a shoulder loop from armpit across the deltoid
+   - a diagonal hip loop from crotch to iliac crest
+   - mouth and eye loops
+   - triangles only in flat, non-deforming areas
+2. **Rigid gear** stays hard-surface (chamfer class 1–1.5 cm), bound 100% to one bone.
+3. **Texture:**
+   - Color-block 60/30/10. Painted brows and lip line.
+   - Skin: flat, no normal detail. Its shading comes from `T_*_RampSkin` plus the underglow.
+   - Write vertex color R = 1 on skin.
+   - No painted core shadows: tune the ramp instead.
+4. **Skeleton:** Unity HumanBodyBones names if the character uses Humanoid, all deform bones, +Y down each bone. Twist bones for forearm and upper arm, `SOCKET_` bones for weapons and gadgets, cape or hood chains from the inventory.
+5. **Skinning:** automatic weights, then `vertex_group_limit_total(limit=4)`, normalize, and smooth only in the joint loops. Pose test: elbow 120°, knee 130°, shoulder up 90°. Fix candy-wrapping with twist bones.
+6. **LODs:**
+   - LOD1: simplified fingers, middle joint loops removed, face bones reassigned to Head.
+   - LOD2: mitten hands, small gear folded into texture.
 
-1. **Proportion sheet first.** A stylized hero is 7–7.5 heads tall (realistic is 8): heroic shoulders, readable hands about 10% oversized, feet planted wide. Block the body out from an edge skeleton with a Skin modifier (a radius per joint) plus Subdivision 1–2, since stacked primitives read as a mannequin, and keep primitives for rigid worn pieces. Pose it in an **A-pose with arms at 45°**. Unity Humanoid handles A-pose, and the shoulder deforms better than in a T-pose.
-2. **Costume over a body.** Model what the brief shows as the surface. Never model a full body underneath clothing, since hidden faces are wasted budget. Delete everything that's covered. Rigid worn pieces are separate floating meshes in the bake source and merged into the game mesh where they don't deform.
-3. **Deformation topology:**
-   - 3 loops around each joint (elbow, knee, finger knuckles), with the middle loop on the pivot.
-   - The shoulder needs a loop running from the armpit across the deltoid.
-   - The hip needs a diagonal loop from the crotch to the iliac crest.
-   - Use evenly spaced quads on the limbs. Triangles go only in flat, non-deforming areas.
-   - Face: mouth and eye loops for stylized expressions.
-   - Cloth or accessories that hang and move (from the inventory) get their own bone chain rather than deform topology.
-4. **Hair or head coverings (if the brief has any).** Solid sculpted clumps (Valorant style). This means opaque geometry with a painted strand gradient, not alpha cards, because alpha overdraw is expensive on mobile. Use alpha-clip cards only for wisps at the edges.
-5. **Texture emphasis.**
-   - Color-block the silhouette: primary color 60%, secondary 30%, accent 10%. Put the accent on a gameplay-readable spot that the brief's palette points to.
-   - Paint forms into the albedo: a soft core shadow under the chin, under the brow and in the clothing folds.
-   - The normal map carries only the chamfers and big fold forms. Skin stays without normal detail, for a clean read.
-   - Faces: painted eyebrows and lip line, with eyes as separate mesh-plus-texture so gaze bones can move them.
-6. **Skeleton.** Build a clean game skeleton directly with code. If the character will use Unity's Humanoid rig, name the standard bones with the exact names Unity's avatar mapper expects (Unity's HumanBodyBones set). Every bone is a deform bone. Roll the bones so +Y runs down the bone, consistently on both sides.
-   - Add everything else as non-humanoid children, taken from the inventory: twist bones where limbs twist badly, sockets for carried or worn items, and chains for cloth or accessories.
-   - Don't export a Rigify control rig. Build one only if the user animates in Blender, and constrain it to this skeleton.
-7. **Skinning.** Bind with automatic weights, then fix the weights in code:
-   - Use `vertex_group_limit_total(limit=4)` and normalize.
-   - Smooth the weights only in the joint loops.
-   - Rigid armor goes 100% to a single bone.
-   - Run a quick pose test (elbow 120°, knee 130°, shoulder up 90°) and take a screenshot. Fix candy-wrapper twisting with the twist bones, not with more geometry.
-8. **LODs.**
-   - LOD1: simplify the fingers, take the middle joint loop out on the big joints, and turn the face loops into a planar face.
-   - LOD2: mitten hands, and fold small accessories into the texture.
-   - Drop the face bones from LOD1 onward by setting their weights to the Head bone.
+   The signature pieces stay in every LOD.
 
 ## Pitfalls
 
-- Be honest in the brief about what code-built organic forms are: a clean, correctly topologized base for an artist to polish, not a hero-final sculpt. Don't call it final.
-- The neck seam between head and body shells must share vertex normals, so weld them before you split the UVs.
-- If the game has both first-person arms and third-person bodies, every shared socket needs the same orientation in both. Otherwise carried items misalign between views.
+- The 30 m read comes from the head, shoulders and signature pieces. Spending tris on belts and pouches is wasted.
+- Large saturated red-pink areas on the upper body compete with the enemy fresnel.
+- The neck seam between head and body shares vertex normals. Weld before splitting the UVs.
+- First-person arms and third-person body share socket orientations exactly.

@@ -1,73 +1,78 @@
-# Mobile Game Asset
+# Mobile Game Asset — Valorant-style
 
-A Claude skill that builds game-ready 3D models for Unity mobile games by driving Blender. Assets are stylized, with big readable shapes, crisp chamfers and painted color.
+A Claude skill that builds game-ready 3D assets in the **Valorant design language** for Unity URP (mobile or PC) by driving Blender.
 
 ## What it is
 
-The skill turns a text description or a reference image into one shippable asset for **Unity 6+ (URP, mobile)**. It works like a lead artist on a budget: every polygon, UV island and texture channel has a job.
+The skill turns a text description or concept image into one shippable asset that looks like it belongs in a stylized tactical hero shooter: big readable planar shapes, flat painted color, light that comes from the shader, and gameplay clarity on every quality tier.
 
-It covers six categories, each with its own rules in `references/`:
+It's built on one rule: **shape first.** Texture and shading only decorate a shape, so nothing gets UV'd, textured or shaded until a measured grey-clay blockout passes the Shape Gate.
 
-| Category | File |
-|---|---|
-| Character (humanoid) | `character.md` |
-| Creature (non-humanoid) | `creature.md` |
-| Environment (modular kits) | `environment.md` |
-| Prop | `prop.md` |
-| Weapon & equipment | `weapon.md` |
-| Vehicle | `vehicle.md` |
+The design language comes from Riot's [VALORANT Shaders and Gameplay Clarity](https://www.riotgames.com/en/news/valorant-shaders-and-gameplay-clarity). `references/valorant-style.md` marks every rule as either Riot's or the skill's own.
+
+**Categories:** character, creature, environment kit, prop, weapon & equipment, vehicle. Each has a file in `references/`.
 
 ## How to use
 
-1. Install the skill: put this folder in your Claude skills directory.
-2. Connect **Blender MCP** if you can. Without it, the skill writes the brief and one Python script per stage for you to run in Blender later.
-3. Ask for an asset in plain words, or attach concept art:
-   > "Build a compact SMG for my mobile shooter: boxy receiver, vented shroud, folding stock. Off-white, dark grey, orange accent."
-4. Review the **Asset Brief** it shows before building, and correct any assumptions.
-5. Import the exported FBX and textures into Unity using the checklist at the end of the run.
+1. Put this folder in your Claude skills directory.
+2. Connect **Blender MCP** if you can. Without it, the skill writes the brief and one script per stage for you to run later.
+3. Ask for an asset, or attach concept art:
+   > "Enemy creature for my mobile hero shooter: lean wolf-like stalker, bony spine crest, club tail, glowing amber eyes. Charcoal, bone-white, orange glow."
+4. Check the **Asset Brief**, then the **clay review sheet** after the blockout. Approve the shape before texturing starts.
+5. In Unity, copy `unity/` into your project, then follow the material and import checklists in `references/shader.md` and `references/unity.md`.
 
 ## What it does and how
 
-**1. Brief.** It reads the request or image and writes a short brief:
-- size, pivot and triangle budgets per LOD
-- texture size and texel density
-- palette
-- a **Part Inventory** listing what moves, deforms, attaches, glows or opens
+| # | Stage | How |
+|---|---|---|
+| 0 | **Source a free base** | Searches CC0 / CC-BY libraries (Poly Haven, Sketchfab, Quaternius, Kenney, MakeHuman…) for a base mesh instead of starting from a default primitive. Checks the licence, imports, normalizes and records provenance (`references/sourcing.md`, `import_base.py`). |
+| 1 | **Brief** | Role and camera distance, size, silhouette keys at 30 m, big/medium/small ratio, palette as value bands, Part Inventory |
+| 2 | **Blockout** (most of the effort) | Four measured passes: landmarks and scale figure → primary masses with gesture and taper → secondary forms and negative space → pivots, range tests and value plan (`references/blockout.md`) |
+| 3 | **Shape pass** | Chamfer classes, planar faceting, cloth fold wedges, exaggerated function, no drift from the blockout |
+| ■ | **Shape Gate** | Grey-clay sheet (`shape_review.py`) scored on a 10-item checklist. A failure goes back to the shape. |
+| 4 | **Game mesh → normals → UV** | Budgeted topology, marked sharps plus Weighted Normal, UV only on the approved shape |
+| 5 | **Bake** | Normal (chamfers and big forms; micro detail only in first person), contact AO, edge mask |
+| 6 | **Color** | Flat material-color albedo with **no baked light**, MAER mask, diffuse ramps |
+| 7 | **Readability** | Rendered at true gameplay pixel size with the target lighting model; contrast and fresnel tests |
+| 8 | **LODs** | Same silhouette on every tier (IoU ≥ 0.95), so low-end players see what high-end players see |
+| 9 | **Rig → export** | Deform-only skeleton, sockets, Unity FBX, validation |
 
-**2. Pipeline.** It runs these stages, skipping any that a small asset doesn't need:
+### The light layer: `unity/`
 
-| Stage | How |
+| File | What it does |
 |---|---|
-| Blockout → shape pass | Real-world scale and weighted bevels. Organic forms are built high-detail with the Skin modifier, then retopologized. |
-| Game mesh → normals | Hits the LOD0 budget with marked sharp edges and a Weighted Normal modifier. No auto smooth, no subdivision on the game mesh. |
-| UV | Seams on sharp edges, angle-based unwrap, consistent texel density, packed with padding |
-| Bake | Normal, AO and edge mask from a detail source mesh (Cycles, Selected to Active) |
-| Texture | Stylized node stack (zone colors, gradient, AO, edge highlight, roughness bands) plus `surface.md` layering, baked to albedo / normal / mask |
-| LODs | Edge loops removed by hand, never a blind decimate. The silhouette and UV seams are kept. |
-| Rig / sockets | Deform-only skeleton, at most 4 weights per vertex, `SOCKET_` empties taken from the Part Inventory |
-| Export | `scripts/export_unity.py`, checked with `scripts/validate.py` |
+| `VStyleLit.shader` | One URP shader for every category: ramp diffuse from one light, cubemap-only specular, clamped ambient, team fresnel, skin underglow, distance brightening, MAER decode. The Low tier drops instructions, not features. |
+| `VStyleQuality.cs` | Switches the low shader tier from the Quality level |
+| `VStyleCharacter.cs` | Sets the team fresnel color, the ambient clamp, and no cast shadows in third person |
+| `VStyleAmbientZone.cs` | Sets the ambient clamp per map area |
 
-**3. Unity tiers.** One LOD chain and one texture set serve the Low, Medium and High quality settings, through LOD Bias, Maximum LOD Level and Mipmap Limit Groups (`references/unity.md`).
+The shader is written against the Unity 6 / URP 17 API but hasn't been compiled here. Check it in your project first.
 
-**4. Hand-off.** The finished asset comes with:
-- the as-built brief
-- the validation report (tris, materials, texel density, bones)
-- the list of exported files
-- the Unity import checklist
-- a list of what was skipped
+### Scripts (`scripts/`)
 
-### Bundled scripts
-
-| Script | Purpose |
-|---|---|
-| `validate.py` | Checks tris per LOD, n-gons, non-manifold edges, texel density, materials, weights and naming |
-| `pack_mask.py` | Packs the mask texture: R metallic, G AO, B zone ID, A smoothness |
-| `export_unity.py` | Exports FBX with Unity axis and scale settings |
+| Script | Runs in | Purpose |
+|---|---|---|
+| `import_base.py` | Blender | Imports a free base (glTF/FBX/OBJ/.blend), refuses uncleared licences, re-faces to −Y, scales to the brief, puts the pivot at the ground, logs to `<Asset>_SOURCES.md` |
+| `shape_review.py` | Blender | Clay sheet: ortho and 3/4 views, 10 m and 30 m silhouettes, value thumbnail, landmarks, IoU vs a previous version |
+| `readability.py` | Blender | Target-shader preview at gameplay distances; contrast and LOD silhouette tests |
+| `check_albedo.py` | Blender | Fails albedos with baked lighting, noise or out-of-range values |
+| `gen_ramp.py` | any Python 3 | Diffuse and skin ramp textures (presets or custom stops) |
+| `pack_mask.py` | Blender | MAER mask: R metallic, G AO / emissive, B roughness, A tint zone |
+| `validate.py` | Blender | Tris per LOD, n-gons, non-manifold edges, texel density, weights, naming |
+| `export_unity.py` | Blender | Unity FBX settings |
 
 ### Naming
 
-`SM_` / `SK_` meshes · `_LOD0..n` · `_COL` colliders · `SOCKET_<name>` · `T_<Asset>_A|N|M` · `M_<Asset>`
+| Pattern | Meaning |
+|---|---|
+| `SM_` / `SK_` | static / skinned mesh |
+| `_LOD0..n` | LOD levels |
+| `_COL` | collider |
+| `SOCKET_<name>` | attach point |
+| `T_<Asset>_A`, `_N`, `_MAER` | albedo, normal, mask |
+| `T_<Asset>_RampDiffuse`, `_RampSkin` | diffuse ramps |
+| `M_<Asset>` | VStyle/Lit material |
 
 ### Tests
 
-`evals/` holds four test cases: a character, a creature, a weapon, and an image-reference prop. Each case has a prompt and graders.
+`evals/` has four cases (character, creature, weapon, image-reference prop). Each has 20 graders, including base-model sourcing and licensing, blockout passes, the Shape Gate ordering, a light-free albedo, measured readability and tier parity.

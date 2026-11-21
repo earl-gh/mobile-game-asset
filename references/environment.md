@@ -1,47 +1,58 @@
 # Environment (modular kits)
 
-Environments aren't modeled; they are **assembled** from a kit. Valorant-style maps are clean, readable spaces: big flat planes, chamfered edges, color-coded zones, and sightlines kept free of clutter. On mobile, the real budget is draw calls and overdraw, not triangles.
+Riot: environments take up most of the screen, so they must be "as cheap as possible", and players "mentally block out" the environment to focus on characters. A Valorant-style map is a clean, readable space: big flat planes, chamfered edges, color-coded sites, calm surfaces, lightmapped light. The environment **supports** the characters and never competes with them.
 
 ## Budget
 
 | | LOD0 | LOD1 | LOD2 / Cull |
 |---|---|---|---|
 | Kit piece (wall, floor, trim) | 50–800 tris | 50% | cull < 1% screen |
-| Large landmark (tower, statue) | 3–8k | 50% | 25%, or an imposter |
-| Visible frame total | High 250k · Med 180k · Low 100k tris | | |
-| Batches (after SRP Batcher and instancing) | High ≤ 150 · Med ≤ 110 · Low ≤ 70 | | |
+| Large landmark | 3–8k | 50% | 25% or imposter |
+| Visible frame total | High 250k · Med 180k · Low 100k | | |
+| Batches | High ≤ 150 · Med ≤ 110 · Low ≤ 70 | | |
 
-- **Textures:** shared, not per piece. Use one **trim sheet** (2048), 2–4 tileables (1024) and one decal atlas (1024). Texel density is **256 px/m on Low and 512 px/m on High** (one mip apart, handled by the Mipmap Limit Group).
-- **Materials:** a kit should share at most 4–6 materials in total.
+- **Textures:** one trim sheet (2048), 2–4 tileables (1024), one decal atlas (1024). 256 px/m on Low, 512 on High.
+- **Materials:** ≤ 4–6 for the whole kit, VStyle/Lit Environment, lightmapped.
+
+## Blockout (the space, before any piece)
+
+1. **Metrics first, locked:**
+   - grid 0.5 m
+   - character 1.8 m, eye height 1.6 m
+   - cover 1.0 m (crouch) and 1.5–1.6 m (standing)
+   - doors 1.4–2.0 m wide
+   - corridor ≥ 3 m
+   - wall 3–4 m per floor, wall thickness 0.25–0.5 m
+2. **Grey-box the described space** from kit-shaped boxes on the grid. Check it from player eye height:
+   - sightlines
+   - cover heights
+   - the readable route
+   - one clear landmark silhouette per area (tower, arch, statue) for orientation
+3. **Kit list from the grey-box:** the smallest set of pieces that rebuilds it. Straight runs at 1/2/4 m, corner types, openings, floor tiles, transitions. Every piece shares edge profiles.
+4. **Profiles:** each kit piece is designed as an extruded side profile (base, plinth, body, cap) with large chamfers (5–10 cm). That's the Valorant architecture read: thick, soft-cornered, chunky trims.
+5. **Pivots** at the bottom-left-back corner on the grid.
+6. **Value plan:**
+   - Walls and floors in the mid-value, low-saturation band.
+   - Site color-coding (A, B and C sites) as big calm zones, not small accents.
+   - Interactive or traversable things get the accent.
+   - Run `shape_review.py` on the assembled grey-box. The characters in front of it must pop.
 
 ## Pipeline additions
 
-1. **Grid and metrics first.**
-   - Pick a grid (0.5 m is a common start) and derive the metrics (wall height, cover height, opening widths, wall thickness) from the game's character controller and the brief, then lock them.
-   - Pivots go at the bottom-left-back corner, snapped to the grid, so the pieces tile with integer offsets.
-2. **Kit list before modeling.** Derive the pieces from the brief's layout: the smallest set that builds the described space (straight runs at a few lengths, the corner and junction types it needs, the openings, the floor and the transitions it shows). Every piece shares edge profiles so the seams line up.
-3. **Trim sheet workflow.** This is the studio way, and it differs from props.
-   - **Model the trim sheet first.** Take a 2048 plane split into horizontal strips (bevels, panel lines, pipe strips, vents) and bake each strip from a high-poly strip onto that plane.
-   - **UV the kit pieces onto the strips.** Snap the UV shells to the strip bounds, and allow U to tile freely past 0–1.
-   - Large flat faces map to the tileables in world-scale UVs.
-   - Result: one material covers dozens of pieces, with no unique bake per piece.
-4. **Mesh decals.** For damage, grime and signage, use floating planes 1 mm off the surface, alpha-clip on the decal atlas, and as few as possible. They add detail without unique textures.
-5. **Vertex color blending.** In R, blend tileable B over A (for example clean to dirty, or paint to bare). In G, AO from Blender's "Dirty Vertex Colors" with a corrected spread. Unity's shader reads the vertex colors.
-6. **UV2 for lightmaps.** Author UV2 as a non-overlapping unwrap (Lightmap Pack with 0.02 margin), and give each piece a uniform scale relative to its size. Static pieces get lightmaps; dynamic objects use light probes.
-7. **Gameplay readability check.**
-   - Take a screenshot from player eye height (1.6 m).
-   - Anything the player must read as interactive or traversable gets the accent color.
-   - Background pieces lose contrast: lower saturation and flatter gradients.
-8. **Occlusion and colliders.**
-   - Large opaque blocking pieces become Unity occluder static.
-   - Colliders are boxes per piece, made as `_COL` cubes in Blender and turned into BoxColliders.
-   - Walkable stepped surfaces get a ramp collider, not individual steps.
+1. **Trim sheet first:** a 2048 plane of horizontal strips (chamfers, panel lines, plinths, caps), each baked from a high-poly strip. Snap kit UVs to the strips, letting U tile freely. Big flat faces use world-scale tileables.
+2. **Calm surfaces:**
+   - Tileables have large soft tonal shifts (≤ 8% value) and no grime noise in the play space.
+   - Decals (signage, site markers, a little wear) are mesh decals 1 mm off the surface. Use them sparingly, and keep them away from character-height backgrounds where they'd break silhouettes.
+3. **Vertex color R** blends tileable A and B, for broad variation. No AO in vertex color: the lightmap carries light.
+4. **UV2 for lightmaps:** Lightmap Pack, margin 0.02, uniform scale. Static pieces are lightmapped, and their diffuse comes from the lightmap, not the ramp.
+5. **Colliders:** box `_COL` per piece; ramp colliders on stairs.
 
 ## LOD notes
 
-Small kit pieces usually skip LOD1 and go straight to cull. Large landmarks get a LOD2 imposter: a baked billboard or a cross of 2 quads.
+Small pieces skip LOD1 and go straight to cull. Landmarks get an imposter at LOD2.
 
 ## Pitfalls
 
-- No T-junction vertices along shared edges, or seams flicker.
-- Tileable UVs must stay world-scale even when you scale an instance. Don't scale kit pieces non-uniformly in-engine; make a new piece instead.
+- No T-junctions along shared edges.
+- Don't scale pieces non-uniformly in-engine: make a new piece.
+- Saturated, high-contrast or busy walls behind head height are the most common clarity bug.
