@@ -96,6 +96,14 @@ Studios don't model the game mesh directly for organic forms, and neither should
 4. **LOD0 is not reduced for weak hardware.** "Runs on low-end phones" is met by the tier system (LOD1 and LOD2, texture mip limit, skin weights), never by cutting LOD0 below the category budget. An earlier run cut LOD0 to a third of budget and looked toy-like because of it.
 5. **Beauty pass before hand-off.** Render the hero views with the real material in Cycles (CPU is fine) or EEVEE, since Workbench hides normal maps and gloss, then check for the toy tells: constant-width limbs, a tube head with no jaw or brow, flat or uniform colour, hard facets on organic skin, parts that float or don't connect. Fix and re-render at least three times, spending the effort on the head and extremities.
 
+**Lessons from tested runs** (each one cost a debugging pass):
+- **Remesh density.** Quadriflow-style remeshers are uniform. To give the head or thin limbs more quads, warp those regions up before the remesh and back afterwards; without it thin parts collapse. Make the source manifold first and check it in code, because one non-manifold edge cancels the remesh with no useful message.
+- **UV patches.** Label faces, not vertices, when splitting into patches, or faces straddling two labels stitch the patches back into one huge island. Coverage depends more on island count and padding than on packer settings: fewer, compact patches with single seams on thin parts beat many small ones. Measure coverage as unique pixels, since summed UV area counts overlaps as efficiency.
+- **Texel target.** Decide it before packing from texture size, surface area and a planned utilisation, and write it into the brief. Reading it back from the result makes the validate check meaningless.
+- **Region masks.** Define anatomical region masks once with smooth transitions and reuse them for geometry displacement and in the shader. Don't let edge, curvature or AO maps drive colour or gloss on smooth regions: they posterise into blotches.
+- **Form checks.** Toes point away from the heel: a backward foot reads as a hoof blob however good the leg is. Orient thin flat parts so their width faces the important view axis. Bury the roots of attached parts in the underlying form, add a boss, and taper plates into the surface so they read as grown, not stuck on.
+- **Debugging renders.** When a render looks wrong, swap one input at a time: stale bakes, leftover scaffold objects and bad lighting all pass for texture problems. Delete scaffolding (retopo targets and sources) once the game mesh exists, and re-run bakes after any geometry change.
+
 ### What "not generic" means here
 
 The default tools produce amateur results when you use them as-is. Use the studio version instead:
