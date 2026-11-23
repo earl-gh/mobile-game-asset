@@ -24,7 +24,8 @@ Work like a lead artist on a budget. Every polygon, UV island and texture channe
 
    Pick by gameplay role, not by look: the same shape is a prop if it's set dressing, a weapon or equipment if the player holds or wears it, and a vehicle if the player rides or drives it.
 
-2. **Read `references/unity.md`** before the export stage. It covers the quality-tier mapping and import settings.
+2. **For organic assets** (characters, creatures, anything fleshy), read `references/anatomy.md` before stage 1 and `references/topology.md` before stage 3. The order is fixed: anatomy blockout, then topology, then texture. A later stage never repairs an earlier one: fix the blockout, then redo what depends on it.
+3. **Read `references/unity.md`** before the export stage. It covers the quality-tier mapping and import settings.
 
 ## Right-size the work (ponytail principle)
 
@@ -32,7 +33,7 @@ The stages in section 2 are a ceiling, not a quota. Test runs spent about 1,100 
 
 - A stage whose exit check is already met is skipped or merged into its neighbour, and the brief's "Skipped" line says so. Typical merges for small hard-surface assets: shape pass + game mesh + normals in one script, and no bake at all when the detail is texture-only (use a trim sheet, atlas or palette strip instead of a unique bake). Hero, organic and close-view assets are never texture-only: they always get the detail bake, because skipping it is what makes them look flat and toy-like.
 - Aim for the fewest scripts that keep each step verifiable. Share helpers in one module instead of re-deriving them per stage.
-- Never skipped: scale and pivot, normals and UV sanity, `scripts/validate.py`, export.
+- Never skipped: scale and pivot, normals and UV sanity, `scripts/validate.py`, export, and for organic assets the anatomy gate and the topology audit.
 - Numbers in the category files (tris, texel density, bones, batches) are starting budgets, not specs. Tune them to the project's profiled devices and note what you changed, but never by cutting LOD0 for low-end phones: the quality tiers (LOD1/LOD2, mip limit) serve those, and LOD0 serves the High setting. Choose the texture size first and let the asset's unique surface area decide the px/m, keeping it consistent across the asset. Consistency matters more than hitting a prescribed figure.
 
 ## 1. Intake → Asset Brief
@@ -75,9 +76,9 @@ Each category file adds its own stages and overrides. The skeleton below is the 
 
 | # | Stage | Exit check (verify before moving on) |
 |---|---|---|
-| 1 | **Blockout.** Primary forms only, at real-world scale (1 BU = 1 m), with the pivot placed. | The silhouette reads at game-camera distance in a screenshot. Size matches the brief. |
+| 1 | **Blockout.** Primary forms only, at real-world scale (1 BU = 1 m), with the pivot placed. For organic assets this is an anatomy-first blockout (`references/anatomy.md`): analog, skeleton landmarks, then masses. No topology, detail or colour yet. | The silhouette reads at game-camera distance in a grey screenshot. Size matches the brief. Organic assets also pass the anatomy gate. |
 | 2 | **Shape pass.** Secondary forms, then chamfers. | Every edge you can see has a deliberate bevel width. No noise. |
-| 3 | **Game mesh.** The final low poly: quads plus intentional tris, supporting loops only where they serve the silhouette or deformation. | Tri count within the LOD0 budget. Zero n-gons and non-manifold geometry. |
+| 3 | **Game mesh (topology).** Quad or tri decided per part class, deliberate loops at joints, no needless intersections (`references/topology.md`). | Tri count within the LOD0 budget. `scripts/audit_topology.py` shows no errors that the part class does not tolerate (buried faces, poles on bends, n-gons on deforming parts). |
 | 4 | **Normals.** Mark sharp edges at hard angles, add a Weighted Normal modifier (Keep Sharp), and split UVs on every sharp edge. | No smoothing gradients across flat faces in a matcap screenshot. |
 | 5 | **UV.** Seams on sharp edges and hidden borders, unwrap, straighten rectilinear shells, keep texel density consistent, pack (see below). | Texel density within ±10% of target. 8 px padding at 2048, 4 px at 1024. |
 | 6 | **Bake.** Duplicate the game mesh as the bake source and add the detail the game mesh lacks (bevels, cuts; Subdivision only for organic forms), then use Cycles' "Selected to Active" with a cage. Bake normal and AO, plus an edge mask (see the texture recipe). | No ray misses or skew in the screenshot. |
@@ -91,7 +92,7 @@ Each category file adds its own stages and overrides. The skeleton below is the 
 Studios don't model the game mesh directly for organic forms, and neither should you. The earlier "child-made" results came from skipping this:
 
 1. **High-detail source first.** Smooth base volumes: a Skin modifier on the proportion skeleton with graded radii (heavy at shoulder and hip, tapering at the extremities), Subdivision 2, shade smooth. Model the head as its own volume (cranium, muzzle or face, jaw, brow, and ears or equivalents the brief calls for), not as a tapered tube. Merge the volumes (Remesh modifier, voxel mode), then add the three-scale detail from `references/surface.md`. Constant-radius tubes along splines with flat shading are the main toy tell: don't use them for bodies.
-2. **Retopo to the game mesh.** Use `bpy.ops.object.quadriflow_remesh` (under a `temp_override` for a 3D view) to the LOD0 face target, or fall back to the Remesh modifier followed by planar Decimate. Then correct the loops at joints and the head by hand-written edits. The high-detail source stays as the bake source.
+2. **Retopo to the game mesh.** An automatic remesh (`bpy.ops.object.quadriflow_remesh`, or the Remesh modifier plus planar Decimate as a fallback) gives a uniform starting surface only: the Blender manual says it does not give deformation topology. For anything that bends, build deliberate loops at the joints and move poles off them (`references/topology.md`), then audit. The high-detail source stays as the bake source.
 3. **Smooth shading** with the baked normal map for organic assets; flat or hard shading is for hard-surface parts only.
 4. **LOD0 is not reduced for weak hardware.** "Runs on low-end phones" is met by the tier system (LOD1 and LOD2, texture mip limit, skin weights), never by cutting LOD0 below the category budget. An earlier run cut LOD0 to a third of budget and looked toy-like because of it.
 5. **Beauty pass before hand-off.** Render the hero views with the real material in Cycles (CPU is fine) or EEVEE, since Workbench hides normal maps and gloss, then check for the toy tells: constant-width limbs, a tube head with no jaw or brow, flat or uniform colour, hard facets on organic skin, parts that float or don't connect. Fix and re-render at least three times, spending the effort on the head and extremities.
