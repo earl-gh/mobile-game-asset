@@ -23,7 +23,8 @@ BURIED_REMOVED_PCT = 1       # rigid part below this counts as "buried faces alr
 MAX_DEFORM_PAIRS = 3         # intersecting pairs touching a deforming body tolerated before ERROR
 MAX_IRREGULAR_PCT = 25       # deforming parts
 MAX_THIN_PCT = 5
-MAX_EDGE_CV = 0.6
+MAX_EDGE_CV = 0.9            # tapered meshes with 2:1 density steps legitimately exceed 0.6
+# NOTE: a mesh is only classed 'deforming' once it has vertex groups or an armature modifier, so run the audit after weighting
 TOP = 8                      # rows in "top offenders" lists
 
 RAY = Vector((0.577, 0.5773, 0.5775)).normalized()   # oblique, avoids grazing axis-aligned edges
@@ -106,7 +107,7 @@ def mesh_stats(obj, bm):
         nonmanifold=sum(1 for e in bm.edges if len(e.link_faces) > 2),
         boundary=sum(1 for e in bm.edges if len(e.link_faces) == 1),
         loose_v=sum(1 for v in bm.verts if not v.link_edges), loose_e=sum(1 for e in bm.edges if not e.link_faces),
-        zero=sum(1 for f in bm.faces if f.calc_area() < ZERO_AREA), dups=dups, thin=thin, thin_pct=100 * thin / max(1, nt),
+        zero=sum(1 for f in bm.faces if f.calc_area() < ZERO_AREA), dups=dups, thin=thin, thin_pct=100 * thin / max(1, sum(len(f.verts) - 2 for f in bm.faces)),   # % of all triangles, not of tri faces
         cv=cv)
 
 def make_bodies(obj, bm, cls):
@@ -194,7 +195,8 @@ def audit(collection=None, pattern=None):
         for k, txt in (('nonmanifold', "non-manifold edges (3+ faces on an edge)"), ('loose_v', "loose vertices"), ('loose_e', "loose edges"),
                        ('zero', "zero-area faces"), ('dups', "duplicate vertices")):
             if s[k]: add('ERROR', 50, f"{o.name}: {s[k]} {txt}")
-        if s['severe']: add('ERROR', 80 + s['severe'], f"{o.name}: {s['severe']} pole(s) of valence >= {s['ref'] + 2}, worst {s['worst'][0]} at {s['worst'][1]} {s['worst'][2] or ''}: star-shaped, shades and deforms badly")
+        # a triangulated quad mesh reads tri-dominant and its diagonals add valence, so only quad-dominant meshes get pole errors: audit the quad version for poles
+        if s['severe']: add('ERROR' if s['ref'] == 4 else 'ADVISORY', 80 + s['severe'], f"{o.name}: {s['severe']} pole(s) of valence >= {s['ref'] + 2}, worst {s['worst'][0]} at {s['worst'][1]} {s['worst'][2] or ''}: star-shaped, shades and deforms badly")
         if s['cls'] == 'deforming':
             if s['ngon']: add('ERROR', 70, f"{o.name}: {s['ngon']} n-gons on a deforming mesh (unpredictable triangulation under skinning)")
             if s['tri'] > 0.2 * max(1, s['tri'] + s['quad']): add('ADVISORY', 30, f"{o.name}: {100 * s['tri'] / (s['tri'] + s['quad']):.0f}% of faces are triangles on a deforming mesh (joints/bends want quad loops)")

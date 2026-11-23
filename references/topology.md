@@ -15,7 +15,7 @@ The engine always triangulates (n-gons >4 sides always; quads too unless Unity "
 | Subdivided / bake-source (high poly) | All quads, poles on flat areas, no tris or n-gons on curvature | Subdivision exposes every flaw; sculpt tools pinch on tris. [S Polycount Topology] |
 | Rigid hard-surface | Tris fine; model quads, triangulate last | "Every edge there for a reason"; bevels cost thin tris. [S Polycount] |
 | Flat non-deforming areas | Tris/n-gon fans fine, fewest tris that hold the silhouette | No deformation or shading to protect. [S/J] |
-| Caps and tips | Collapse to a tri fan or one n-gon; the pole sits at the tip or cap centre | Pole is hidden by the end; a quad ring there is wasted budget. [J] |
+| Caps and tips | End with a 2:1 ladder into a single quad, using side counts that halve to 4 (16, 8, 4). Avoid tri fans on anything that matters | Tested: fans made poles of valence 12-24 that the audit flagged; ladders cost a few faces and removed every high pole. A fan on a tiny rigid part is acceptable. [tested] |
 | Thin sheets | Quads along the strip, no long slivers; give thickness only if silhouette needs it | Thin tris waste sub-pixel raster work. [S Polycount] |
 | Hidden surfaces | Delete. Never spend tris on them | Manifold rule: no internal unseen faces. [S Polycount Topology] |
 
@@ -32,7 +32,8 @@ Rules:
 - Valence 3 and 5 are normal. Avoid 6+ ("star" poles pinch under deformation and subdivision). [C; Blender-oriented guide, Polycount forum]
 - Put poles on flat or hidden areas, away from joints and off the silhouette. Why: poles make dimples/bumps when subdivided and shade/deform unevenly. [S Polycount Topology]
 - A 3-pole condenses density, a 5-pole spreads it; use them to steer loops, not by accident. [C CG Cookie snippet]
-- High-valence pole: split it into two 5-poles or a 3+5 pair, or collapse it to a tri fan on a hidden/flat spot or cap centre. [J]
+- High-valence poles in a tested build came from cap fans and from holes placed too close together. Ladder the caps and leave at least one column of faces between neighbouring holes; valence 6+ on a deforming body is achievable to avoid. [tested]
+- Audit the quad version of the mesh for poles and the triangulated version for thin and buried triangles: triangulating adds valence and raises false pole errors. [tested]
 - Five-point poles are not banned (geodesic shapes use them). This is judgment, not law. [C]
 
 ## 3. Edge flow at joints and deformation zones
@@ -42,6 +43,9 @@ Rules:
 - Rig a rough weight pass and test extreme poses BEFORE locking topology. [forum]
 - Step density by halving edge count per step (1:2), absorbed by a tri pair or a 3/5 pole in a non-bending area; never jump from dense ring to a long tri. Why: sub-pixel slivers cost raster work and shade badly. [C/J; slivers S Polycount]
 - Static, rigid, non-deforming parts do not need loops; spend nothing on flow there. [C]
+- A cheap way to get deliberate loops from an approved blockout volume: ray-march a ring of rays from a centre line at planned stations, so loops land exactly at joints and support positions. The ray length must exceed the largest local radius and the centre must sit inside the volume. Pick side counts that halve to 4. [tested]
+- The limb-to-torso junction is the weak spot: the joint centre is inside the torso, so the loops are really armpit and groin loops (hole rim, transition loop, first limb ring), and weights jump across the hole rim, causing flat skirt panels and cracks. Plan a gradual weight falloff there and pose-test early. Do the pose test before trusting the audit: it found the junction problem the audit could not. [tested]
+- Build LODs by running the same builder with coarser parameters, not by decimating, and drop the side count right after a limb root so the step does not create slivers. [tested]
 
 ## 4. Intersecting geometry policy
 Acceptable (studio practice): rigid hard-surface details as floaters baked into the normal map; instanced/modular static meshes; buried faces removed. Why: normal maps store direction, not depth, so floaters are cheap; instance-based engines render them fine. [S Polycount NMM, forum]
@@ -51,7 +55,7 @@ Costs of needless intersections: wasted triangles on buried surface; bake ray ar
 
 Joining rules:
 1. Prefer one contiguous low-poly mesh where the budget allows (fewer bake overlaps, less in-game aliasing, better UVs). [S Polycount Texture Baking, NMM]
-2. To merge: boolean/remesh union then clean up (merge strays into underlying verts), or sink the part a LIMITED depth (just past the host's thickness/bevel, so no gap shows in any pose or LOD) and delete every buried face. [boolean cleanup S forum; depth J]
+2. To merge: boolean/remesh union then clean up, or place the part ON the skin (within about 1 mm) as a separate shell. Tested: a 3 mm sink left 10% of the part buried, and 1.5 mm above the skin showed a gap, so sinking "a limited depth" is impractical. For organic parts the best join was fusing into the body with hole-and-bridge: equal vertex counts on both sides, one relaxed transition loop, a gap between neighbouring holes, and never projecting the transition loop back onto the surface (it tangles). [tested]
 3. For a smooth silhouette join, add a collar/boss: a small ring with 1 loop of bevel at the host surface. [J]
 4. Keep seams (UV, hard edge, material, mesh breaks) on hidden borders: underside, back, inner side. [C; hard edges need UV splits S Polycount/Marmoset]
 5. If a floater must stay: separate object/bake group, exploded or Ignore Backfaces/limited cage distance for the bake, move back afterwards. [S Polycount, Marmoset]

@@ -37,7 +37,7 @@ Stance: foot flat (plantigrade), knee straight about 175-180 deg, vertical line 
 | Item | Value | Tag |
 |---|---|---|
 | Body length (point of shoulder to point of buttock) | about 1.1-1.18 x WH (canid, breed standard states "10:9 to 8.5"; ambiguous); felid and light sighthounds closer to 1.0-1.1 | [S] breed std, one breed / [J] |
-| Chest (brisket) depth | 45-48% of WH, so brisket sits about at elbow, elbow at about 50-55% WH from ground | [S] (GSD standard) / [J] |
+| Chest (brisket) depth | 45-48% of WH, so brisket sits about at elbow, elbow at about 45-55% WH from ground | [S] (GSD standard) / [J] |
 | Foreleg length vs chest depth | foreleg slightly longer than chest depth | [S] |
 | Head length | about 0.35-0.42 WH; skull (cranium) about 50% of head length, muzzle other 50% | [S] skull ratio / [J] range |
 | Neck | carried about 45 deg above horizontal; length about 0.8-1.0 head length | [S] angle / [J] |
@@ -48,10 +48,11 @@ Stance: foot flat (plantigrade), knee straight about 175-180 deg, vertical line 
 | Standing angles, interior, 180 = straight | scapula 45 deg to horizontal; scapula-humerus about 90-110; elbow 135-150; carpus about 180; hip 105-125; stifle 145 (range 130-157); hock 134 (range 122-148) | stifle, hock [S] (Giansetto 2022, 1 study, breed varies); scapula 45 and shoulder 90 [S] breed std; elbow, carpus, hip [J] low |
 | Vertebrae | dog 7C 13T 7L 3S, tail 20-23; cat 7C 13T 7L 3S, tail 19-23 | [S] |
 | Tail | reaches about the hock (dog); cat tail about 0.8-1.0 x body length | [S] dog / [J] low cat |
-| Mass | front limbs carry about 60% of weight: COM sits just behind the scapulae at about 55% WH | [S] 60% / [J] position |
+| Mass | front limbs carry about 60% of weight: COM projects to the ground between the feet, nearer the front (see corrections below the table) | [S] 60% |
 | Spine curve | neck rises from withers, back near level or slightly sloping, croup 20-30 deg down, tail follows; felids have a more arched flexible lumbar curve | [C] |
 | Shoulder girdle | no functional clavicle in dogs (scapula floats on muscle sling); cats have a vestigial free clavicle | [S] |
 Felid limb bones scale near-isometrically with size across species, so one proportion set can be rescaled for any felid size. [S] (Doube 2009, Day & Jayne 2007, via abstracts)
+Corrections from a test build: (1) the 145 deg stifle, used with this table's own segment lengths and a vertical metatarsal, puts the hock ahead of the hip; the build used about 120 deg (a Z-shaped hind limb, from memory, unverified) and accepted 118-157. Take the stifle from the reference silhouette when there is one. (2) The table's own segments give an elbow height near 47% WH, so treat 45-55% as the band. (3) Centre-of-mass height is not meaningful with a long tail: gate on the ground projection inside the support polygon (about 55% of the way from hind to front feet), not on a height.
 
 ## 2c. Other body plans: what to look up, what to measure
 
@@ -90,3 +91,9 @@ Tolerances are [J] starting points; relax by a stated amount only with a stated 
 | 10 | Silhouette overlay: render side and front ortho with analog skeleton/outline image at same scale; compute IoU or edge distance | IoU >= 0.7 vs the intended design silhouette (>= 0.8 if photoreal analog) |
 | 11 | Mass bands: thickness proximal > distal for every limb; rib cage widest between 40-60% of its length | true |
 | 12 | Scale sanity: total height (m) within the analog's real range unless declared | true |
+
+Lessons from a test build (17 checks, 16 pass, 1 untestable):
+- A check that re-tests numbers you typed in cannot fail. Checks 2 and 3 were tautological because the landmarks were placed from the same table; only checks measured on the built mesh (withers height, symmetry, landmarks inside the mass, joint angles) found real errors. Measure the mesh, not the parameters.
+- Check 6 needs working joint ranges for the analog, which this file does not give, so it passes trivially; check 10 needs a reference silhouette, so with no reference image mark it "not testable", never "pass".
+- Smooth-union (exp-sum) blends inflate the result by about k*ln(n) wherever n primitives overlap: the withers read 5-7% over spec until k was cut. Keep k to roughly 2-3% of the smallest feature and re-measure.
+- Check 9 caught landmarks sitting 70-97 mm under the skin, and the symmetry check caught a 3% asymmetry from asymmetric add-ons. Render a 3/4 grey view early: every proportion fix in the build came from a bad silhouette, not from a number.
